@@ -55,11 +55,14 @@ jobs:
         
         # Test health endpoint
         curl -f http://localhost:8080/actuator/health || exit 1
-        echo "✅ Health check passed"
+        echo "✅ Actuator health check passed"
         
-        # Test proxy endpoints
-        curl -f http://localhost:8080/api/proxy/health || exit 1
-        echo "✅ Proxy endpoints working"
+        # Test application endpoints
+        curl -f http://localhost:8080/api/health || exit 1
+        echo "✅ API health endpoint working"
+        
+        curl -f http://localhost:8080/api/info || exit 1
+        echo "✅ API info endpoint working"
         
         kill $APP_PID
     

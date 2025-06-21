@@ -30,8 +30,14 @@ docker run -p 8080:8080 hub.marschall.systems/observability/janus-native:latest
 # Health check
 curl http://localhost:8080/actuator/health
 
-# Proxy endpoints
-curl http://localhost:8080/api/proxy/health
+# Application endpoints
+curl http://localhost:8080/api/health
+curl http://localhost:8080/api/info
+
+# Proxy endpoint (POST)
+curl -X POST http://localhost:8080/api/proxy \
+  -H "Content-Type: application/json" \
+  -d '{"message": "test"}'
 ```
 
 ## 🔧 Local Development
