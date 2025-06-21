@@ -43,6 +43,8 @@ jobs:
         ./mvnw clean package -Pnative -DskipTests \
           -Dspring.aot.jvmArguments="-Xmx4g -XX:MaxMetaspaceSize=1g"
         
+        echo "📊 Target directory contents:"
+        ls -la target/
         echo "📊 Native image size:"
         ls -lh target/janus-native-test
     
@@ -84,6 +86,17 @@ jobs:
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
           type=raw,value=native-amd64
+    
+    - name: Verify native binary exists
+      run: |
+        echo "🔍 Verifying native binary exists before Docker build..."
+        if [ ! -f "target/janus-native-test" ]; then
+          echo "❌ Native binary not found at target/janus-native-test"
+          echo "📁 Contents of target directory:"
+          ls -la target/
+          exit 1
+        fi
+        echo "✅ Native binary found: $(ls -lh target/janus-native-test)"
     
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
