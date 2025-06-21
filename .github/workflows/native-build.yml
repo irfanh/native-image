@@ -1,0 +1,48 @@
+name: Native Image Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-native:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup GraalVM
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: '17'
+        distribution: 'graalvm-community'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        native-image-job-reports: 'true'
+    
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+    
+    - name: Build Native Image for Linux AMD64
+      run: |
+        ./mvnw clean package -Pnative -DskipTests \
+          -Dspring.aot.jvmArguments="-Xmx8g"
+    
+    - name: Upload Native Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: janus-native-linux-amd64
+        path: target/janus-native-test
+        retention-days: 7
+    
+    - name: Test Native Image
+      run: |
+        ./target/janus-native-test &
+        sleep 10
+        curl -f http://localhost:8080/actuator/health || exit 1
+        pkill -f janus-native-test 

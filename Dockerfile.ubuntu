@@ -1,0 +1,34 @@
+# Multi-stage build using Ubuntu (more stable)
+FROM ubuntu:22.04 AS builder
+
+# Install prerequisites
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install GraalVM
+RUN curl -L https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-17.0.9/graalvm-community-jdk-17.0.9_linux-x64_bin.tar.gz \
+    | tar -xz -C /opt/
+ENV JAVA_HOME=/opt/graalvm-community-openjdk-17.0.9+9.1
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+# Install native-image
+RUN gu install native-image
+
+# Copy source
+COPY . /app
+WORKDIR /app
+
+# Build with conservative memory settings
+RUN export MAVEN_OPTS="-Xmx4g" && \
+    ./mvnw clean package -Pnative -DskipTests \
+    -Dspring.aot.jvmArguments="-Xmx3g -XX:MaxMetaspaceSize=1g"
+
+# Runtime stage
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/janus-native-test /app/janus-native-test
+WORKDIR /app
+EXPOSE 8080
+CMD ["./janus-native-test"] 

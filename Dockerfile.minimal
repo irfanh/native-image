@@ -1,0 +1,21 @@
+# Minimal build with ultra-conservative settings
+FROM --platform=linux/amd64 ghcr.io/graalvm/graalvm-community:17-ol8 AS builder
+
+# Install native-image
+RUN gu install native-image
+
+# Copy source code
+COPY . /app
+WORKDIR /app
+
+# Build with minimal memory and G1GC (more stable)
+RUN export MAVEN_OPTS="-Xmx2g -XX:+UseG1GC" && \
+    ./mvnw clean package -Pnative -DskipTests \
+    -Dspring.aot.jvmArguments="-Xmx1536m -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
+
+# Runtime stage - minimal image
+FROM --platform=linux/amd64 gcr.io/distroless/base-debian11:nonroot
+COPY --from=builder /app/target/janus-native-test /app/janus-native-test
+WORKDIR /app
+EXPOSE 8080
+CMD ["./janus-native-test"] 
