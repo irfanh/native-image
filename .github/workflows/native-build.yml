@@ -1,4 +1,4 @@
-name: Native Image Build
+name: Build Native AMD64 Image
 
 on:
   push:
@@ -6,12 +6,20 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  REGISTRY: hub.marschall.systems
+  IMAGE_NAME: observability/janus-native
+
 jobs:
-  build-native:
+  build-native-amd64:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Setup GraalVM
       uses: graalvm/setup-graalvm@v1
@@ -30,19 +38,69 @@ jobs:
     
     - name: Build Native Image for Linux AMD64
       run: |
+        echo "🔨 Building native image with optimized settings..."
+        export MAVEN_OPTS="-Xmx6g"
         ./mvnw clean package -Pnative -DskipTests \
-          -Dspring.aot.jvmArguments="-Xmx8g"
-    
-    - name: Upload Native Binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: janus-native-linux-amd64
-        path: target/janus-native-test
-        retention-days: 7
+          -Dspring.aot.jvmArguments="-Xmx4g -XX:MaxMetaspaceSize=1g"
+        
+        echo "📊 Native image size:"
+        ls -lh target/janus-native-test
     
     - name: Test Native Image
       run: |
+        echo "🧪 Testing native image..."
         ./target/janus-native-test &
+        APP_PID=$!
         sleep 10
+        
+        # Test health endpoint
         curl -f http://localhost:8080/actuator/health || exit 1
-        pkill -f janus-native-test 
+        echo "✅ Health check passed"
+        
+        # Test proxy endpoints
+        curl -f http://localhost:8080/api/proxy/health || exit 1
+        echo "✅ Proxy endpoints working"
+        
+        kill $APP_PID
+    
+    - name: Log in to Private Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ secrets.REGISTRY_USERNAME }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=native-amd64
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.k8s
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64
+    
+    - name: Image summary
+      run: |
+        echo "## 🎉 Native AMD64 Image Built Successfully!" >> $GITHUB_STEP_SUMMARY
+        echo "- **Binary size**: $(ls -lh target/janus-native-test | awk '{print $5}')" >> $GITHUB_STEP_SUMMARY
+        echo "- **Platform**: linux/amd64" >> $GITHUB_STEP_SUMMARY
+        echo "- **Registry**: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Tags**: ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🐳 Pull the image:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY 
