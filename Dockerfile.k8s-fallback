@@ -10,7 +10,17 @@ RUN apt-get update && apt-get install -y curl && \
 COPY target/ /tmp/target/
 
 # Find and copy the native executable
-RUN find /tmp/target -type f -executable -not -name "*.jar" -not -name "*.sh" | head -1 | xargs -I {} cp {} /app/janus-native && \
+RUN echo "Contents of /tmp/target:" && ls -la /tmp/target/ && \
+    NATIVE_BINARY=$(find /tmp/target -type f -executable -not -name "*.jar" -not -name "*.sh" | head -1) && \
+    if [ -z "$NATIVE_BINARY" ]; then \
+        echo "No native binary found! Looking for any binary files:" && \
+        find /tmp/target -type f -not -name "*.jar" -not -name "*.sh" && \
+        echo "Looking for files with 'janus' in name:" && \
+        find /tmp/target -name "*janus*" && \
+        exit 1; \
+    fi && \
+    echo "Found native binary: $NATIVE_BINARY" && \
+    cp "$NATIVE_BINARY" /app/janus-native && \
     chmod +x /app/janus-native && \
     chown app:app /app/janus-native && \
     rm -rf /tmp/target

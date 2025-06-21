@@ -87,22 +87,23 @@ jobs:
           type=raw,value=latest,enable={{is_default_branch}}
           type=raw,value=native-amd64
     
-    - name: Verify native binary exists
+    - name: Inspect build artifacts
       run: |
-        echo "🔍 Verifying native binary exists before Docker build..."
-        if [ ! -f "target/janus-native-test" ]; then
-          echo "❌ Native binary not found at target/janus-native-test"
-          echo "📁 Contents of target directory:"
-          ls -la target/
-          exit 1
-        fi
-        echo "✅ Native binary found: $(ls -lh target/janus-native-test)"
+        echo "🔍 Inspecting build artifacts before Docker build..."
+        echo "📁 Contents of target directory:"
+        ls -la target/
+        echo "🔍 Looking for executable files:"
+        find target/ -type f -executable 2>/dev/null || echo "No executable files found"
+        echo "🔍 Looking for files with 'janus' in name:"
+        find target/ -name "*janus*" 2>/dev/null || echo "No janus files found"
+        echo "🔍 All files in target:"
+        find target/ -type f 2>/dev/null || echo "No files found"
     
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile.k8s
+        file: ./Dockerfile.k8s-fallback
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
